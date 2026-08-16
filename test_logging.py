@@ -1,10 +1,4 @@
-"""Tests for the structured log.
-
-The promise being tested is narrow and specific: every line of sync_log.txt is
-a complete JSON object, no matter what happened during the run. That's the only
-thing that makes the file worth anything to a machine, and it's exactly what
-the old free-text format couldn't guarantee.
-"""
+"""Tests that every line of the log is a complete JSON object."""
 
 import json
 import os
@@ -60,7 +54,6 @@ def test_events_carry_the_fields_needed_to_query_them():
         assert "timestamp" in event
         assert "event" in event
 
-    # the specific thing free text made hard: pull out one SKU's actions
     corrections = [
         e for e in events
         if e["event"] == "action_applied" and e.get("action") == "correct_outlier"
@@ -72,7 +65,7 @@ def test_events_carry_the_fields_needed_to_query_them():
 
 
 def test_run_summary_is_queryable_instead_of_a_wall_of_text():
-    """The old report was one 12-line entry. It's now one object with numbers."""
+    """The end-of-run summary is one object with the counts as fields."""
     cleanup()
     try:
         from executor import run_agent
@@ -92,7 +85,7 @@ def test_run_summary_is_queryable_instead_of_a_wall_of_text():
 
 
 def test_a_multi_line_message_cannot_break_the_format():
-    """The exact failure the old format had: one entry spilling over many lines."""
+    """A newline inside a message must not split the record over two lines."""
     cleanup()
     try:
         log_event("test_event", message="first line\nsecond line\nthird line")

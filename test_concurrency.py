@@ -1,12 +1,4 @@
-"""Tests that two agents running at the same instant can't both act.
-
-The sequential idempotency proof (run it twice, second run does nothing) has a
-gap underneath it: it only holds because the first run finished writing the
-ledger before the second run read it. Two processes overlapping in time both
-read "not handled yet" and both act.
-
-Reproducing that reliably needs care — see run_two_agents_at_once().
-"""
+"""Tests that two agents started at the same moment can't both act."""
 
 import os
 import sys
@@ -33,14 +25,11 @@ def cleanup():
 
 
 def run_two_agents_at_once(delay=2.0):
-    """Start two agent processes at the same wall-clock instant.
+    """Start two agent processes at the same moment.
 
-    Launching them back to back is not enough. Starting a Python interpreter
-    takes longer than the agent's critical section, so the second process would
-    normally begin after the first had already finished — and the race would
-    quietly fail to reproduce. Instead both children import everything first,
-    then spin until a shared start time. The overlap becomes reliable rather
-    than a matter of luck.
+    Both children import everything first, then wait for a shared start time.
+    Starting them back to back doesn't work - Python startup takes longer than
+    the sync itself, so they wouldn't overlap.
     """
     start_at = time.time() + delay
     procs = [
@@ -73,12 +62,11 @@ def test_only_one_of_two_simultaneous_runs_acts():
     )
     # and exactly one process must have declined to run
     assert count_across(outputs, "REFUSED TO RUN") == 1, (
-        "no process refused — they both ran:\n\n" + "\n---\n".join(outputs)
+        "no process refused, they both ran:\n\n" + "\n---\n".join(outputs)
     )
 
 
 def test_no_duplicate_alerts_from_simultaneous_runs():
-    """The brief calls out duplicate alerts specifically, so assert on them."""
     cleanup()
     try:
         outputs = run_two_agents_at_once()
@@ -90,7 +78,6 @@ def test_no_duplicate_alerts_from_simultaneous_runs():
 
 
 def test_lock_is_released_so_the_next_run_can_start():
-    """A lock that outlives its run would wedge the agent permanently."""
     cleanup()
     try:
         from executor import run_agent
@@ -104,7 +91,6 @@ def test_lock_is_released_so_the_next_run_can_start():
 
 
 def test_lock_is_released_even_when_the_run_crashes():
-    """try/finally, not just a happy-path cleanup."""
     cleanup()
     try:
         import executor
@@ -123,15 +109,14 @@ def test_lock_is_released_even_when_the_run_crashes():
             executor.get_combined_stock = original
 
         assert not os.path.exists(os.path.join(HERE, LOCK_FILE)), (
-            "lock survived a crash — every later run would be blocked"
+            "lock survived a crash, so every later run would be blocked"
         )
     finally:
         cleanup()
 
 
 if __name__ == "__main__":
-    # Child process used by run_two_agents_at_once().
-    # Import first so that only the sync itself lands in the shared window.
+    # child process used by run_two_agents_at_once()
     sys.path.insert(0, HERE)
     from executor import run_agent
 

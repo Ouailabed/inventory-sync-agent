@@ -1,14 +1,9 @@
-"""Start all three warehouse services at once.
+"""Start all three warehouse services. Ctrl-C stops them all.
 
-Purely a convenience — each service is an ordinary uvicorn app and can be run
-by hand in its own terminal if you'd rather watch them separately:
+Each one can also be run on its own:
 
     cd warehouses
     python -m uvicorn warehouse_a:app --port 8001
-    python -m uvicorn warehouse_b:app --port 8002
-    python -m uvicorn warehouse_c:app --port 8003
-
-Ctrl-C here stops all three.
 """
 
 import os

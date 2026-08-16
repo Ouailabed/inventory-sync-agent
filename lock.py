@@ -1,20 +1,4 @@
-"""A single-holder lock, so only one sync can be in flight at a time.
-
-The obvious way to write this is:
-
-    if os.path.exists(LOCK_FILE):    # <-- don't
-        return False
-    open(LOCK_FILE, "w").close()
-
-which has exactly the bug the lock is supposed to fix. Two processes can both
-run the check before either has created the file, and both conclude they're
-alone. The gap is small, but it's the same kind of gap as the one in the agent
-itself, so closing it with a wider version of it would be pointless.
-
-os.open(..., O_CREAT | O_EXCL) instead asks the operating system to create the
-file *only if it does not already exist*, as one indivisible step. Exactly one
-caller can win that, no matter how the two processes interleave.
-"""
+"""Lock file so only one sync runs at a time."""
 
 import os
 import json
@@ -24,14 +8,13 @@ LOCK_FILE = "agent.lock"
 
 
 def acquire_lock():
-    """Try to become the one running sync. True if we got it, False if not."""
+    """Take the lock. Returns True if we got it, False if someone else has it."""
+    # O_CREAT | O_EXCL creates the file only if it doesn't exist, in one step.
     try:
         fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         return False
 
-    # Record who holds it. This is only ever read by a human working out why a
-    # run was refused — the exclusion itself is done by the OS above.
     holder = {
         "pid": os.getpid(),
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -42,18 +25,17 @@ def acquire_lock():
 
 
 def read_lock():
-    """Who currently holds the lock? Returns {} if we can't tell."""
+    """Return the pid and start time of the lock holder, or {} if unknown."""
     try:
         with open(LOCK_FILE, "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        # The holder may still have been mid-write when we looked. Not knowing
-        # who holds it doesn't change the answer: we still aren't running.
+        # gone, or still being written
         return {}
 
 
 def release_lock():
-    """Give up the lock. Safe to call even if it's already gone."""
+    """Remove the lock file. Does nothing if it isn't there."""
     try:
         os.remove(LOCK_FILE)
     except FileNotFoundError:
@@ -61,6 +43,7 @@ def release_lock():
 
 
 def describe_holder():
+    """Message describing who holds the lock."""
     holder = read_lock()
     if not holder:
         return "another sync is already running"

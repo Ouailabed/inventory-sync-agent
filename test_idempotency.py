@@ -1,7 +1,4 @@
-"""The core proof: running the agent twice must not act twice.
-
-The warehouse services these talk to are started by conftest.py.
-"""
+"""Running the agent twice should not act twice."""
 
 import os
 
@@ -48,7 +45,7 @@ def test_second_run_makes_no_new_actions():
 
 
 def test_correction_persists_to_warehouse_b():
-    """Read back over HTTP, not off disk — proves the write actually landed."""
+    """Read the value back over HTTP to check the write really happened."""
     cleanup()
     try:
         from executor import run_agent

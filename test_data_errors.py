@@ -1,8 +1,4 @@
-"""Tests for the malformed / corrupted data handling.
-
-The point of every test here is the same: the agent must survive bad input from
-one warehouse and still do useful work with the other two.
-"""
+"""Tests for broken and corrupted warehouse data."""
 
 import os
 import json
@@ -43,7 +39,6 @@ def conflicts_now():
 
 
 def test_corrupted_json_file_does_not_crash_the_run():
-    """A warehouse whose file is unparseable costs us that warehouse, not the run."""
     build_default_files()
     write_raw("C", '{"SKU-001": {"item": "SKU-001", "stock_lev')
     try:
@@ -60,7 +55,7 @@ def test_corrupted_json_file_does_not_crash_the_run():
 
 
 def test_unreadable_source_does_not_invent_missing_skus():
-    """We couldn't ask warehouse C, so we must not claim C is missing anything."""
+    """C never answered, so nothing should be reported as missing from C."""
     build_default_files()
     write_raw("C", "this is not json at all")
     try:
@@ -76,7 +71,7 @@ def test_unreadable_source_does_not_invent_missing_skus():
 
 
 def test_broken_record_is_not_also_reported_as_missing():
-    """C has SKU-001, it's just unreadable. "Missing from C" would be a lie."""
+    """C has SKU-001, the record just can't be read. That isn't 'missing'."""
     build_default_files()
     write_raw("C", json.dumps({
         "SKU-001": {"item": "SKU-001"},                     # unusable
@@ -90,14 +85,13 @@ def test_broken_record_is_not_also_reported_as_missing():
     missing = [c for c in conflicts if c["type"] == "missing_sku" and c["sku"] == "SKU-001"]
     assert missing == [], f"SKU-001 wrongly reported missing: {missing}"
 
-    # it is still reported — as the data problem it actually is
+    # still reported, but as a data error
     assert any(
         c["type"] == "data_error" and c["sku"] == "SKU-001" for c in conflicts
     )
 
 
 def test_one_bad_record_does_not_hide_the_good_ones():
-    """A single unusable row is isolated; its neighbours are still processed."""
     build_default_files()
     write_raw("A", json.dumps({
         "SKU-001": {"sku_id": "SKU-001", "qty": "fifty"},   # not a number
@@ -118,7 +112,7 @@ def test_one_bad_record_does_not_hide_the_good_ones():
 
 
 def test_missing_field_is_reported_by_name():
-    """The flag should tell a human which field to go and look at."""
+    """The error should name the field that was missing."""
     build_default_files()
     write_raw("C", json.dumps({"SKU-001": {"item": "SKU-001"}}))
     try:
@@ -132,7 +126,7 @@ def test_missing_field_is_reported_by_name():
 
 
 def test_data_errors_are_idempotent_too():
-    """Bad data must not produce a fresh duplicate alert on every single run."""
+    """Bad data shouldn't raise a new alert on every run."""
     build_default_files()
     write_raw("C", json.dumps({"SKU-001": {"item": "SKU-001", "stock_level": None}}))
     try:

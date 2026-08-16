@@ -1,4 +1,5 @@
 def decide_action(conflict):
+    """Return the action to take for one conflict."""
     if conflict["type"] == "quantity_mismatch":
         values = conflict["values"]
 
@@ -11,12 +12,8 @@ def decide_action(conflict):
         agreeing = sources_by_qty[best_qty]
         runners_up = [q for q in sources_by_qty if len(sources_by_qty[q]) == len(agreeing)]
 
-        # A usable majority needs two things: at least two independent systems
-        # reporting the same number, and no other number matching that count.
-        # The second half looks redundant with only three warehouses (the most
-        # even split possible is 2-1), but add a fourth and a 2-2 split would
-        # otherwise pick a "winner" arbitrarily and overwrite two systems that
-        # were just as credible as the two it sided with.
+        # A majority needs 2+ systems on the same number, and no tie for first.
+        # The tie check matters once there are 4+ warehouses (a 2-2 split).
         if len(agreeing) >= 2 and len(runners_up) == 1:
             outlier_sources = [s for s in values if s not in agreeing]
             return {
@@ -26,14 +23,11 @@ def decide_action(conflict):
                 "fix_sources": outlier_sources,
             }
 
-        # No majority. Every system is reporting something different, so there
-        # is no number here worth trusting and no cleverer way to compute one.
+        # No majority.
         reported = ", ".join(f"{s}={q}" for s, q in sorted(values.items()))
 
-        # ...but first, check *why* the vote failed. If a system that could have
-        # broken the tie simply couldn't be read, that is a software problem,
-        # and a recount means sending a person to physically walk the floor.
-        # Fix the feed and re-run before spending that.
+        # If a source we couldn't read might have broken the tie, that's a data
+        # problem, not a stock problem. Don't order a recount for it.
         unreadable = conflict.get("unavailable_sources")
         if unreadable:
             return {
@@ -45,9 +39,7 @@ def decide_action(conflict):
                 ),
             }
 
-        # Nothing was unreadable — the systems genuinely disagree. A recount is
-        # the only thing that produces a number worth writing. Parking this in a
-        # review queue would just hand a human the same dead end the agent hit.
+        # The systems really disagree, so only a physical count settles it.
         return {
             "sku": conflict["sku"],
             "action": "trigger_recount",
@@ -62,9 +54,7 @@ def decide_action(conflict):
         }
 
     elif conflict["type"] == "data_error":
-        # Always a human's call. Every other action this agent takes is based on
-        # trusting the numbers it read; here the numbers are exactly what's
-        # broken, so there is nothing safe to compute from.
+        # nothing safe to calculate from broken data, so a human looks at it
         where = f"warehouse {conflict['source']}"
         return {
             "sku": conflict["sku"],

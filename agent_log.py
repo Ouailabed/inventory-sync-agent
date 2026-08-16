@@ -1,19 +1,4 @@
-"""Structured logging: one JSON object per line, one line per event.
-
-The log used to be free text — pleasant to read, useless to query. Answering
-"how many corrections failed this week" or "which SKU gets flagged most" meant
-regexing prose that was never designed to be parsed. Worse, the end-of-run
-report was written as a single entry spanning twelve physical lines, so even
-line-by-line reading produced nonsense.
-
-Each event is now one JSON object on one line, which any log pipeline can read
-directly. The human sentence is kept in a `message` field rather than thrown
-away, so the file stays greppable and stays readable over someone's shoulder.
-The structure is added, not swapped in.
-
-Living in its own module rather than inside ledger.py, which had no business
-owning the logger.
-"""
+"""Event log. One JSON object per line."""
 
 import json
 import os
@@ -23,12 +8,7 @@ LOG_FILE = "sync_log.txt"
 
 
 def log_event(event, message=None, sku=None, action=None, **details):
-    """Append one event to the log as a single JSON line.
-
-    Empty fields are left out rather than written as null, so each line
-    describes what actually happened instead of carrying a fixed schema padded
-    with blanks. Anything reading these handles absent keys routinely.
-    """
+    """Append one event to the log. Fields left as None are omitted."""
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "event": event,
@@ -42,20 +22,13 @@ def log_event(event, message=None, sku=None, action=None, **details):
     if details:
         record["details"] = details
 
-    # Never indent: JSON-lines is only parseable while each record occupies
-    # exactly one line. json.dumps escapes any newline inside a value, so a
-    # multi-line message can no longer break the file the way it used to.
+    # no indent - each record has to stay on one line
     with open(LOG_FILE, "a") as f:
         f.write(json.dumps(record) + "\n")
 
 
 def read_events(path=LOG_FILE):
-    """Read the log back as a list of dicts.
-
-    The thing the old format couldn't do. Tests assert on events rather than
-    hunting for substrings, and it's genuinely useful by hand for questions
-    like "show me every failed correction".
-    """
+    """Read the log back as a list of dicts. Returns [] if the file is missing."""
     if not os.path.exists(path):
         return []
 

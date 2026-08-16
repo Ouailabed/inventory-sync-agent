@@ -1,7 +1,4 @@
-"""Warehouse C as a standalone service. Speaks item / stock_level.
-
-Unlike A and B this one will happily hold a negative stock level, which is how
-overselling shows up in the data.
+"""Warehouse C service. Uses item / stock_level, and allows negative stock.
 
     python -m uvicorn warehouse_c:app --port 8003
 """

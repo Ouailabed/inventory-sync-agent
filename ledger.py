@@ -1,12 +1,7 @@
-"""The record of which conflicts have already been dealt with.
+"""Keeps track of which conflicts have already been handled.
 
-This is what makes reruns safe. Every conflict is fingerprinted by its full
-content — SKU, type, and the exact values involved — so "already handled" means
-"this precise situation was handled", not "we've seen this SKU before". Change
-any of the values and it's a new fingerprint, which is what lets the agent tell
-a genuinely new conflict apart from one it already fixed.
-
-Logging used to live in here too. It doesn't any more — see agent_log.py.
+Each conflict is fingerprinted from its full content, so a conflict with
+different values counts as a new one.
 """
 
 import json
@@ -28,8 +23,7 @@ def save_ledger(ledger):
 
 
 def make_fingerprint(conflict):
-    # sort_keys so two identical conflicts can't fingerprint differently purely
-    # because their dict keys happened to be built in a different order.
+    # sort_keys keeps the fingerprint stable whatever order the keys were added
     return json.dumps(conflict, sort_keys=True)
 
 

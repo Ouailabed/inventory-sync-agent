@@ -1,7 +1,4 @@
-"""Warehouse A as a standalone service. Speaks sku_id / qty.
-
-Runs on its own port, in its own process, with its own storage. It has no idea
-warehouses B and C exist — which is the point of the exercise.
+"""Warehouse A service. Uses sku_id / qty.
 
     python -m uvicorn warehouse_a:app --port 8001
 """
@@ -38,10 +35,7 @@ def _save(stock):
         json.dump(stock, f, indent=2)
 
 
-# Read from disk on every request rather than caching in memory. Slower, but the
-# agent is allowed to see edits made to the file underneath it, and an in-memory
-# copy was the source of a bug earlier in this project where corrections looked
-# applied but never persisted.
+# reads from disk each request, so edits to the file are picked up
 @app.get("/stock")
 def list_stock():
     return list(_load().values())

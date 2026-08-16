@@ -1,4 +1,4 @@
-"""Warehouse B as a standalone service. Speaks product_code / quantity.
+"""Warehouse B service. Uses product_code / quantity.
 
     python -m uvicorn warehouse_b:app --port 8002
 """

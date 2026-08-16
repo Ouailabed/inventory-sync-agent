@@ -1,8 +1,8 @@
+"""Main entry point. Runs one sync, or runs on a timer."""
+
 import argparse
 import time
 
-# No sys.path juggling any more: the warehouses aren't importable modules that
-# happen to live in a subdirectory, they're services reached over HTTP.
 from detect_conflicts import get_combined_stock, detect_conflicts
 from warehouse_client import WAREHOUSE_CLIENTS
 from decide import decide_action
@@ -11,13 +11,10 @@ from lock import acquire_lock, release_lock, describe_holder, read_lock
 from agent_log import log_event
 
 def apply_action(decision, dry_run=False):
-    """Carry out one decision. Returns True only if it fully succeeded.
+    """Carry out one decision. Returns True if it fully succeeded.
 
-    The return value is the point. Now that corrections travel over the network,
-    a warehouse can be readable when we poll it and gone by the time we write to
-    it. If a failed correction were still written into the ledger, the agent
-    would consider it handled and never try again — the ledger would be claiming
-    a fix that never landed, which is worse than no ledger at all.
+    The caller only writes the conflict to the ledger when this returns True,
+    so a failed correction gets retried on the next run.
     """
     action = decision["action"]
 
@@ -37,9 +34,7 @@ def apply_action(decision, dry_run=False):
                     event = "action_applied"
                     extra = {}
                 except Exception as e:
-                    # Safe to retry next run: the correction is an absolute set,
-                    # not an adjustment, so applying it twice lands on the same
-                    # number. A "subtract 5" style fix would need more care.
+                    # retrying is safe, the fix sets an exact value
                     msg = f"CORRECTION FAILED: {sku} in warehouse {source} - {e} - will retry next run"
                     event = "action_failed"
                     extra = {"error": str(e)}
@@ -70,19 +65,9 @@ def apply_action(decision, dry_run=False):
 
 
 def run_agent(dry_run=False):
-    """Run one sync, unless another one is already in flight.
+    """Run one sync, unless another run already holds the lock.
 
-    The ledger alone makes *sequential* reruns safe: the second run reads what
-    the first one wrote and skips it. That breaks down when two runs overlap in
-    time — both read the ledger before either has written to it, both see
-    "not handled", and both act. Verified in test_concurrency.py: without this
-    guard, two simultaneous runs apply every correction twice and send every
-    alert twice.
-
-    The lock is taken for dry runs too. A dry run writes nothing, so it can't
-    double-apply anything, but it would still be reading a ledger and warehouse
-    files that another process is part-way through rewriting, and reporting
-    that half-written state as if it were the truth.
+    Dry runs take the lock too, so they don't report a half-written state.
     """
     if not acquire_lock():
         msg = f"REFUSED TO RUN: {describe_holder()}"
@@ -97,8 +82,7 @@ def run_agent(dry_run=False):
             "refused": True,
         }
 
-    # finally, not just a line at the end: a crash mid-sync must still release
-    # the lock, or every future run is blocked by a process that no longer runs.
+    # finally, so a crash still releases the lock
     try:
         return _perform_sync(dry_run=dry_run)
     finally:
@@ -134,7 +118,7 @@ def _perform_sync(dry_run=False):
         applied = apply_action(decision, dry_run=dry_run)
 
         if not applied:
-            # Left out of the ledger on purpose, so the next run picks it up.
+            # not added to the ledger, so the next run tries again
             failed_actions += 1
             continue
 
@@ -166,9 +150,7 @@ def _perform_sync(dry_run=False):
         report_lines.append("Breakdown by action type: none (nothing new to act on)")
     report_lines.append("==================================")
 
-    # The pretty block goes to the console for a human watching the run. The log
-    # gets the same numbers as fields instead — which is the whole point of the
-    # change, since "runs where failed > 0" is now a query rather than a regex.
+    # readable report to the console, the same numbers as fields to the log
     print("\n".join(report_lines))
     log_event(
         "run_finished",
@@ -188,34 +170,15 @@ def _perform_sync(dry_run=False):
         "failed_actions": failed_actions,
         "summary": summary,
         "skus_touched": list(skus_touched),
-        # always present, so callers never have to guess whether the key exists
         "refused": False,
     }
 
 
 def run_scheduled(interval_seconds, dry_run=False, max_runs=None):
-    """Run the agent every interval_seconds until stopped with Ctrl-C.
+    """Run the agent every interval_seconds until Ctrl-C.
 
-    A plain loop with time.sleep() rather than a scheduling library. At this
-    size there is nothing a library would do better, and it's one less
-    dependency to install and explain.
-
-    Three things here are deliberate:
-
-    - The sleep is shortened by however long the run took, so the gap between
-      runs stays at interval_seconds instead of drifting out by the duration of
-      every run. If a run overruns the interval the next starts immediately,
-      which catches up rather than building a backlog.
-
-    - A failed run is logged and the loop carries on. An unattended agent that
-      dies on its first bad tick is worse than no agent, because nobody finds
-      out until someone notices the stock is wrong.
-
-    - There is no concurrency handling here on purpose. Runs inside this loop
-      are sequential by construction, and anything running *outside* it — a
-      second scheduler, someone triggering a manual sync — is already handled
-      by the lock in run_agent(). A tick that gets refused just tries again on
-      the next one.
+    Failed runs are logged and the loop carries on. Overlapping runs are
+    already handled by the lock in run_agent().
     """
     if interval_seconds <= 0:
         raise ValueError("interval must be greater than zero")
@@ -246,12 +209,11 @@ def run_scheduled(interval_seconds, dry_run=False, max_runs=None):
             if max_runs is not None and runs >= max_runs:
                 break
 
-            # monotonic, not wall clock: immune to the system clock being
-            # adjusted underneath a long-running process.
+            # subtract the run time so the interval doesn't drift
             elapsed = time.monotonic() - started_at
             time.sleep(max(0, interval_seconds - elapsed))
     except KeyboardInterrupt:
-        print()  # so the stop message isn't stuck on the same line as ^C
+        print()  # newline after ^C
 
     stop_msg = f"=== Scheduler stopped after {runs} run(s) ==="
     print(stop_msg)

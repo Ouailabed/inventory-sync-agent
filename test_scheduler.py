@@ -1,8 +1,4 @@
-"""Tests for running the agent on a timer.
-
-The one that matters is test_repeated_runs_only_act_once: scheduling is where
-a non-idempotent agent does real damage, because nobody is watching it do so.
-"""
+"""Tests for running the agent on a timer."""
 
 import os
 import time
@@ -54,7 +50,6 @@ def test_scheduler_runs_the_requested_number_of_times():
 
 
 def test_repeated_runs_only_act_once():
-    """Idempotency has to survive being run on a timer, not just twice by hand."""
     cleanup()
     try:
         run_scheduled(0.1, max_runs=4)
@@ -86,7 +81,6 @@ def test_every_scheduled_run_is_logged_like_a_manual_one():
 
 
 def test_a_failing_run_does_not_kill_the_scheduler():
-    """One bad tick must not end an unattended agent."""
     cleanup()
     calls = {"n": 0}
     original = executor.run_agent
@@ -115,11 +109,7 @@ def test_a_failing_run_does_not_kill_the_scheduler():
 
 
 def test_ctrl_c_stops_cleanly_and_leaves_no_lock():
-    """Ctrl-C mid-run must not strand the lock and wedge every future run.
-
-    Interrupts the genuine run_agent() rather than a stand-in, so the real
-    try/finally is what's under test.
-    """
+    """Ctrl-C during a run should still release the lock."""
     cleanup()
     original = executor.get_combined_stock
 
@@ -134,7 +124,7 @@ def test_ctrl_c_stops_cleanly_and_leaves_no_lock():
         executor.get_combined_stock = original
         cleanup()
 
-    # stopped on the first tick rather than running all five
+    # stopped on the first run instead of doing all five
     assert runs == 1
     stopped = events_of(events, "scheduler_stopped")
     assert stopped[0]["details"]["runs"] == 1
@@ -150,14 +140,12 @@ def test_interval_is_respected_between_runs():
     finally:
         cleanup()
 
-    # 3 runs means 2 gaps; loose lower bound, generous upper bound so this
-    # doesn't turn into a flaky test on a busy machine
+    # 3 runs means 2 gaps. Bounds are loose so a busy machine doesn't fail it.
     assert elapsed >= 0.8, f"ran too fast ({elapsed:.2f}s) - interval ignored"
     assert elapsed < 6.0, f"took far too long ({elapsed:.2f}s)"
 
 
 def test_zero_interval_is_rejected():
-    """A zero or negative interval would be a busy loop hammering the services."""
     for bad in (0, -5):
         try:
             run_scheduled(bad, max_runs=1)

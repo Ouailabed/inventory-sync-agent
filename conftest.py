@@ -1,11 +1,4 @@
-"""Shared pytest setup: real warehouse services, running for the whole session.
-
-The tests could have talked to the FastAPI apps in-process, which would be
-faster. They start actual servers on actual ports instead, because the thing
-worth testing after moving the warehouses out of process is precisely the part
-an in-process shortcut skips: sockets, timeouts, HTTP status codes, and a
-service that isn't there at all.
-"""
+"""Starts the three warehouse services for the test session."""
 
 import os
 import socket
@@ -58,8 +51,7 @@ def warehouse_services():
     processes = []
     for module_name, port in SERVICES:
         if port_is_open(port):
-            # Already running — probably started by hand for a demo. Leave it
-            # alone rather than fighting it for the port.
+            # already running, leave it alone
             continue
         processes.append(start_service(module_name, port))
 

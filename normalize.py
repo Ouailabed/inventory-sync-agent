@@ -1,6 +1,4 @@
-# Each warehouse invented its own names for the same two pieces of information.
-# Keeping that mapping in one table means the validator below can name the exact
-# field a bad record is missing, instead of just saying "something was wrong".
+# What each warehouse calls its SKU and quantity fields.
 FIELD_NAMES = {
     "A": {"sku": "sku_id", "qty": "qty"},
     "B": {"sku": "product_code", "qty": "quantity"},
@@ -9,11 +7,7 @@ FIELD_NAMES = {
 
 
 def make_data_error(source, sku, detail, raw, scope="record"):
-    """Build a 'this data is unusable' conflict.
-
-    Deliberately shaped like every other conflict (it has a sku and a type) so
-    the decide/apply/ledger pipeline can carry it without special-casing.
-    """
+    """Build a data_error conflict. Same shape as the other conflict types."""
     return {
         "sku": sku,
         "type": "data_error",
@@ -25,14 +19,10 @@ def make_data_error(source, sku, detail, raw, scope="record"):
 
 
 def safe_normalize(record, source):
-    """Validate and normalize one raw record.
+    """Check one raw record and convert it to {sku, qty}.
 
     Returns (normalized, None) if the record is usable, or (None, data_error)
-    if it isn't. Never raises — a single bad record must not stop the sync.
-
-    Bad values are rejected rather than guessed at. A quantity of "fifty" could
-    plausibly be coerced to 50, but this agent writes corrections into live
-    inventory, and a wrong guess there is worse than an unresolved flag.
+    if it isn't. Does not raise.
     """
     fields = FIELD_NAMES[source]
 
@@ -49,8 +39,7 @@ def safe_normalize(record, source):
         return None, make_data_error(source, sku, detail, record)
 
     qty = record[fields["qty"]]
-    # bool is a subclass of int in Python, so a stray `true` would otherwise
-    # sail through this check and silently become a quantity of 1.
+    # bool is a subclass of int, so check for it separately
     if isinstance(qty, bool) or not isinstance(qty, (int, float)):
         detail = f"'{fields['qty']}' is not a number: {qty!r}"
         return None, make_data_error(source, sku, detail, record)
@@ -63,10 +52,10 @@ if __name__ == "__main__":
     print("good record :", safe_normalize(good, "C"))
 
     for bad in [
-        {"item": "SKU-001"},                        # missing quantity
-        {"item": "SKU-001", "stock_level": "fifty"},  # not a number
-        {"item": "SKU-001", "stock_level": True},     # bool sneaking in as 1
-        {"stock_level": 50},                          # missing sku
-        "not-a-record",                               # not an object at all
+        {"item": "SKU-001"},                          # missing quantity
+        {"item": "SKU-001", "stock_level": "fifty"},   # not a number
+        {"item": "SKU-001", "stock_level": True},      # bool
+        {"stock_level": 50},                           # missing sku
+        "not-a-record",                                # not a dict
     ]:
         print("bad record  :", safe_normalize(bad, "C")[1]["detail"])
