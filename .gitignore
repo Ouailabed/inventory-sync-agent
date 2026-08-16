@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime state, not source. The agent and the warehouse services create these
+# on first run, so a fresh clone starts with an empty ledger and empty stock —
+# which is the point. Committing them would ship a pre-populated ledger and
+# make the idempotency demo start from the wrong place.
+ledger.json
+sync_log.txt
+agent.lock
+warehouses/warehouse_a_data.json
+warehouses/warehouse_b_data.json
+warehouses/warehouse_c_data.json
