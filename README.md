@@ -166,29 +166,36 @@ I am on Windows, so I use `python`. On Mac or Linux use `python3`.
 
 **First, install what it needs:**
 
-```
+```bash
 python -m pip install -r requirements.txt
 ```
 
 **Then start the 3 warehouses. Keep this terminal open:**
 
-```
+```bash
 python start_warehouses.py
 ```
 
 **In a second terminal, run the agent:**
 
-```
+```bash
 python executor.py
 ```
 
 Other things you can do:
 
-```
-python executor.py --dry-run          show what it would do, change nothing
-python executor.py --interval 30      run again every 30 seconds, Ctrl-C to stop
-python executor.py --help             see all options
-python -m pytest                      run all 37 tests
+```bash
+# show what it would do, change nothing
+python executor.py --dry-run
+
+# run again every 30 seconds, Ctrl-C to stop
+python executor.py --interval 30
+
+# see all options
+python executor.py --help
+
+# run all 37 tests
+python -m pytest
 ```
 
 The tests start their own warehouse services, so you do not need to start them first for that.
