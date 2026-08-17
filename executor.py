@@ -175,7 +175,7 @@ def _perform_sync(dry_run=False):
 
 
 def run_scheduled(interval_seconds, dry_run=False, max_runs=None):
-    """Run the agent every interval_seconds until Ctrl-C.
+    """Run the agent every interval_seconds until Ctrl-C. Returns the run count.
 
     Failed runs are logged and the loop carries on. Overlapping runs are
     already handled by the lock in run_agent().
