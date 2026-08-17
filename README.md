@@ -34,6 +34,7 @@ The agent talks to them over HTTP, like it would talk to any real service.
 4. **Decide** - simple rules, nothing clever:
    - If 2 or more systems agree on a number, change the one that disagrees to match them
    - If they cannot agree, ask for a real physical count in the warehouse
+   - Unless the only reason they cannot agree is a warehouse we could not read. Then tell a human to fix the data first
    - If a product is missing from a system, tell a human. Creating stock automatically felt too risky to me
    - If stock is negative, ask for a real count. I cannot guess the true number just from seeing it is negative
    - If the data is broken, tell a human. There is nothing safe to calculate from broken data
